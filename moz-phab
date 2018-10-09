@@ -15,6 +15,7 @@ Goals:
 """
 
 import ConfigParser
+import StringIO
 import argparse
 import calendar
 import datetime
@@ -177,11 +178,13 @@ def check_call(command, **kwargs):
     subprocess.check_call(command, **kwargs)
 
 
-def check_output(command, cwd=None, split=True, strip=True, never_log=False):
+def check_output(
+    command, cwd=None, split=True, strip=True, never_log=False, stdin=None
+):
     # wrapper around subprocess.check_output with debug output and splitting
     logger.debug("$ %s" % " ".join(shell_quote(s) for s in command))
     try:
-        output = subprocess.check_output(command, cwd=cwd)
+        output = subprocess.check_output(command, cwd=cwd, stdin=stdin)
     except subprocess.CalledProcessError as e:
         logger.debug(e.output)
         raise Exception("command '%s' failed to complete successfully" % command[0])
@@ -1098,9 +1101,9 @@ def show_commit_stack(repo, commits, show_rev_urls=False, show_warnings=False):
             logger.warning("-> %sD%s" % (repo.phab_url, commit["rev-id"]))
 
 
-def arc_out(args, cwd):
+def arc_out(args, cwd, stdin=None):
     """arc wrapper that logs output"""
-    arc_output = check_output(config.arc + args, cwd=cwd, split=False)
+    arc_output = check_output(config.arc + args, cwd=cwd, split=False, stdin=stdin)
     if logger.level != logging.DEBUG:
         logger.info(arc_output)
     return arc_output
@@ -1108,7 +1111,7 @@ def arc_out(args, cwd):
 
 def arc_ping(cwd):
     """Sends a ping to the Phabricator server using `conduit.ping` API.
-    
+
     Returns: `True` if no error, otherwise - `False`
     """
     logger.debug('$ echo "{}" | %s call-conduit conduit.ping' % " ".join(config.arc))
@@ -1169,6 +1172,51 @@ def update_commits_from_args(commits, args):
             commit["reviewers"] = ["%s!" % r.rstrip("!") for r in commit["reviewers"]]
 
     update_commit_title_previews(commits)
+
+
+def build_api_call_to_update_commit_title_and_summary(commit):
+    """Build a Conduit API transaction to update a commit title and summary.
+
+    See https://phabricator.services.mozilla.com/api/differential.revision.edit for
+    the returned JSON object format.
+
+    Args:
+        commit: A VCS commit data dictionary to use for the call args.
+
+    Returns:
+        A JSON dict that can be passed to a Conduit differential.revision.edit API call.
+    """
+    transactions = []
+    transactions.append(dict(type="title", value=commit["title"]))
+    transactions.append(dict(type="summary", value=commit["body"]))
+    return {"transactions": transactions, "objectIdentifier": commit["rev-id"]}
+
+
+def upload_commit_summary(commit, repo):
+    """Upload a new commit summary and description to Phabricator."""
+    # From https://phabricator.services.mozilla.com/api/differential.revision.edit
+    #
+    # Example call format we are aiming for:
+    #
+    # $ echo '{
+    #   "transactions": [
+    #     {
+    #       "type": "title",
+    #       "value": "Remove unnecessary branch statement"
+    #     }
+    #     {
+    #       "type": "summary",
+    #       "value": "Blah"
+    #     }
+    #   ],
+    #   "objectIdentifier": "D8095"
+    # }' | arc call-conduit --conduit-uri https://phabricator.services.mozilla.com/ --conduit-token <conduit-token> differential.revision.edit
+
+    api_call_args = build_api_call_to_update_commit_title_and_summary(commit)
+    arc_args = ["call-conduit", "differential.revision.edit"]
+    arc_output = arc_out(
+        arc_args, cwd=repo.path, stdin=StringIO.StringIO(json.dumps(api_call_args))
+    )
 
 
 def submit(repo, args):
@@ -1233,8 +1281,11 @@ def submit(repo, args):
     # Process.
     previous_commit = None
     for commit in commits:
+        # Only revisions being updated have an ID.  Newly created ones don't.
+        is_update = bool(commit["rev-id"])
+
         # Let the user know something's happening.
-        if commit["rev-id"]:
+        if is_update:
             logger.info("\nUpdating revision D%s:" % commit["rev-id"])
         else:
             logger.info("\nCreating new revision:")
@@ -1265,7 +1316,7 @@ def submit(repo, args):
             )
             if args.nolint:
                 arc_args.append("--nolint")
-            if commit["rev-id"]:
+            if is_update:
                 arc_args.extend(
                     ["--message", "Revision updated."] + ["--update", commit["rev-id"]]
                 )
@@ -1273,6 +1324,9 @@ def submit(repo, args):
                 arc_args.append("--create")
 
             arc_output = arc_out(arc_args, cwd=repo.path)
+
+            if is_update:
+                upload_commit_summary(commit, repo)
 
         # Extract Revision URL.
         m = ARC_OUTPUT_REV_URL_RE.search(arc_output)
