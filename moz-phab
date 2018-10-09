@@ -1193,7 +1193,13 @@ def build_api_call_to_update_commit_title_and_summary(commit):
 
 
 def upload_commit_summary(commit, repo):
-    """Upload a new commit summary and description to Phabricator."""
+    """Upload a new commit summary and description to Phabricator.
+
+    Args:
+        commit: A VCS commit data dictionary to use for the call args.
+        repo: The Repository that the commit lives in.
+
+    """
     # From https://phabricator.services.mozilla.com/api/differential.revision.edit
     #
     # Example call format we are aiming for:
