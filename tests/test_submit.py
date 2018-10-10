@@ -292,7 +292,7 @@ class TestUploadCommitSummary(unittest.TestCase):
         config.arc = ["arc"]
         c = commit(rev_id="D123")
 
-        review.upload_commit_summary(c, mock.Mock())
+        review.update_phabricator_commit_summary(c, mock.Mock())
 
         check_output.assert_called_once_with(
             ["arc", "call-conduit", "differential.revision.edit"],
