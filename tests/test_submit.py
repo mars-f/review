@@ -300,9 +300,6 @@ class TestUploadCommitSummary(unittest.TestCase):
             split=mock.ANY,
             stdin=mock.ANY,
         )
-        args, kwargs = check_output.call_args
-        api_call_args = json.loads(kwargs["stdin"].getvalue())
-        self.assertIn(("objectIdentifier", c["rev-id"]), api_call_args.items())
 
     def test_build_api_call_to_update_title_and_summary(self):
         # From https://phabricator.services.mozilla.com/api/differential.revision.edit
