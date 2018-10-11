@@ -1217,13 +1217,14 @@ def update_phabricator_commit_summary(commit, repo):
     #   ],
     #   "objectIdentifier": "D8095"
     # }' | arc call-conduit --conduit-uri https://phabricator.services.mozilla.com/ --conduit-token <conduit-token> differential.revision.edit
-
+    logger.debug("Updating revision title and summary in Phabricator")
     api_call_args = build_api_call_to_update_commit_title_and_summary(commit)
     arc_args = ["call-conduit", "differential.revision.edit"]
 
     with NamedTemporaryFile() as temp_f:
         json.dump(api_call_args, temp_f)
         temp_f.file.seek(0)
+        logger.debug("Arc stdin: %s", api_call_args)
         arc_out(arc_args, cwd=repo.path, stdin=temp_f)
 
 
