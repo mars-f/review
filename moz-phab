@@ -15,7 +15,6 @@ Goals:
 """
 
 import ConfigParser
-import StringIO
 import argparse
 import calendar
 import datetime
