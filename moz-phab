@@ -1185,9 +1185,10 @@ def build_api_call_to_update_commit_title_and_summary(commit):
     Returns:
         A JSON dict that can be passed to a Conduit differential.revision.edit API call.
     """
-    transactions = []
-    transactions.append(dict(type="title", value=commit["title"]))
-    transactions.append(dict(type="summary", value=commit["body"]))
+    transactions = [
+        dict(type="title", value=commit["title"]),
+        dict(type="summary", value=commit["body"]),
+    ]
     return {"transactions": transactions, "objectIdentifier": commit["rev-id"]}
 
 
