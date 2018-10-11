@@ -320,7 +320,7 @@ class TestUploadCommitSummary(unittest.TestCase):
         #   "objectIdentifier": "D8095"
         # }' | arc call-conduit --conduit-uri https://phabricator.services.mozilla.com/ --conduit-token <conduit-token> differential.revision.edit
 
-        c = commit(rev_id="D123", title="hi!", body="hello!")
+        c = commit(rev_id="D123", title="hi!", body="hello!\n\nRevision: foobar")
         expected_json = {
             "transactions": [
                 {"type": "title", "value": "hi!"},
@@ -332,6 +332,15 @@ class TestUploadCommitSummary(unittest.TestCase):
         api_call_args = review.build_api_call_to_update_commit_title_and_summary(c)
 
         self.assertDictEqual(expected_json, api_call_args)
+
+    def test_split_summary_from_keywords(self):
+        self.assertEqual("", review.split_summary("\n\n"))
+        self.assertEqual("", review.split_summary("Tag: aaa\n\n"))
+        self.assertEqual("foo", review.split_summary("foo\n\nTag: aaa"))
+        self.assertEqual("foo", review.split_summary("foo\n\n"))
+        self.assertEqual("foo", review.split_summary("Summary:\nfoo\n\nTag: aaa"))
+        self.assertEqual("foo", review.split_summary("Summary:\nfoo"))
+        self.assertEqual("foo", review.split_summary("Summary: foo"))
 
 
 if __name__ == "__main__":

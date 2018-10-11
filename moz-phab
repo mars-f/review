@@ -1151,7 +1151,6 @@ def arc_message(template_vars):
 # "submit" Command
 #
 
-
 def update_commits_from_args(commits, args):
     # Build list of reviewers from args.
     reviewers = list(set(args.reviewer)) if args.reviewer else []
@@ -1173,6 +1172,48 @@ def update_commits_from_args(commits, args):
     update_commit_title_previews(commits)
 
 
+def split_summary(commit_body):
+    """Split the commit summary from the Phabricator keywords in a commit message body.
+
+    Everything before the first keyword (e.g. 'Differential Revision: D123') will be
+    kept as the summary.  If there is a 'Summary:' keyword at the beginning of the text
+    it will be ignored.
+
+    Args:
+        commit_body: A multi-line commit message body string.
+
+    Returns:
+        The multi-line summary section of the commit body.
+    """
+    # Iterate through the lines in the summary looking for the first line that is a
+    # Phabricator keyword, denoted by "\nSome Capitalized Words With A Colon: ...".
+    # Everything before the first keyword is the summary.
+    # Also handle the "Summary" keyword if that happens to lead the summary.
+    summary = []
+    previous_line = ""
+    for line in commit_body.splitlines():
+        if line.startswith("Summary:"):
+            # Is the summary all on one line?
+            desc = line[len("Summary:"):].strip()
+            if desc:
+                line = desc
+            else:
+                # Skip the "Summary:" line entirely
+                continue
+        if line.strip() == "":
+            previous_line = ""
+            continue
+        line_is_keyword = bool(re.match("[A-Z][\w ]+: ", line))
+        if line_is_keyword and previous_line == "":
+            # Everything after this is keywords.  We can stop now.
+            break
+
+        summary.append(line)
+        previous_line = line
+
+    return "\n".join(summary)
+
+
 def build_api_call_to_update_commit_title_and_summary(commit):
     """Build a Conduit API transaction to update a commit title and summary.
 
@@ -1187,7 +1228,7 @@ def build_api_call_to_update_commit_title_and_summary(commit):
     """
     transactions = [
         dict(type="title", value=commit["title"]),
-        dict(type="summary", value=commit["body"]),
+        dict(type="summary", value=split_summary(commit["body"])),
     ]
     return {"transactions": transactions, "objectIdentifier": commit["rev-id"]}
 
